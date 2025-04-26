@@ -47,27 +47,74 @@
         button:hover {
             background-color: #45a049;
         }
-        .qr-code {
-            margin-top: 20px;
-            text-align: center;
-        }
-        .qr-code img {
-            max-width: 300px;
-            border: 1px solid #ccc;
-        }
-        .payload {
-            margin-top: 20px;
-            font-family: 'Courier New', monospace;
-            white-space: pre-wrap;
-            background-color: #fff;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-        }
         .error {
             color: red;
             text-align: center;
             margin-top: 10px;
+        }
+        
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .modal-qrcode {
+            margin: 20px 0;
+        }
+        .modal-qrcode img {
+            max-width: 100%;
+            border: 1px solid #ddd;
+        }
+        .modal-payload {
+            background-color: #f8f8f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 15px;
+            word-break: break-all;
+            font-family: monospace;
+        }
+        .copy-btn {
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        .copy-btn:hover {
+            background-color: #0b7dda;
         }
     </style>
 </head>
@@ -98,26 +145,25 @@
         </div>
         <div class="form-group">
             <label for="txid">Identificador (txid):</label>
-            <input type="text" id="txid" placeholder="Identificador (txid)">
-        </div>
-        <div class="form-group">
-            <label for="nome">Nome do recebedor:</label>
-            <input type="text" id="nome" placeholder="Nome do recebedor">
-        </div>
-        <div class="form-group">
-            <label for="cidade">Cidade do recebedor:</label>
-            <input type="text" id="cidade" placeholder="Cidade do recebedor">
+            <input type="text" id="txid" placeholder="Identificador (máx. 10 caracteres)" maxlength="10">
         </div>
         <button onclick="gerarPix()">Gerar Pix</button>
-        <div class="qr-code">
-            <h2>QR Code</h2>
-            <img id="qr-image" alt="QR Code" style="display: none;">
-        </div>
-        <div class="payload">
-            <h2>Payload PIX</h2>
-            <pre id="payload-text"></pre>
-        </div>
         <div class="error" id="error-message"></div>
+    </div>
+
+    <!-- Modal -->
+    <div id="pixModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="fecharModal()">&times;</span>
+            <h2>PIX Gerado</h2>
+            <div class="modal-qrcode">
+                <img id="modalQrImage" alt="QR Code PIX">
+            </div>
+            <div class="modal-payload">
+                <p id="modalPayloadText"></p>
+            </div>
+            <button class="copy-btn" onclick="copiarPayload()">Copiar Chave PIX</button>
+        </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
@@ -140,7 +186,10 @@
             return crc.toString(16).toUpperCase().padStart(4, '0');
         }
 
-        function gerarPayload(chave, valor, txid, nome, cidade) {
+        function gerarPayload(chave, valor, txid) {
+            const nome = "N"; // Fixo conforme especificação
+            const cidade = "C"; // Fixo conforme especificação
+            
             const payload = [];
             payload.push("000201"); // Payload Format Indicator
             payload.push(`26${`0014BR.GOV.BCB.PIX01${chave.length.toString().padStart(2, '0')}${chave}`.length.toString().padStart(2, '0')}0014BR.GOV.BCB.PIX01${chave.length.toString().padStart(2, '0')}${chave}`);
@@ -163,15 +212,14 @@
             const chave = document.getElementById("chave-pix").value.trim();
             const valorInteiro = parseFloat(document.getElementById("valor-inteiro").value || 0);
             const valorCentavos = parseFloat(document.getElementById("valor-centavos").value || 0);
-            const txid = document.getElementById("txid").value.trim() || "***";
-            const nome = document.getElementById("nome").value.trim() || "N";
-            const cidade = document.getElementById("cidade").value.trim() || "C";
-
-            // Validação
+            let txid = document.getElementById("txid").value.trim().toUpperCase();
+            
+            // Validações
             if (!chave) {
                 showError("A chave PIX é obrigatória!");
                 return;
             }
+            
             if ((tipoChave === "cpf" && !/^\d{11}$/.test(chave)) ||
                 (tipoChave === "cnpj" && !/^\d{14}$/.test(chave)) ||
                 (tipoChave === "telefone" && !/^\+55\d{10,11}$/.test(chave)) ||
@@ -179,25 +227,51 @@
                 showError(`Chave inválida para o tipo ${tipoChave}!`);
                 return;
             }
-
+            
+            // Validar txid (máx 10 caracteres, apenas letras e números)
+            if (txid && !/^[A-Z0-9]{1,10}$/.test(txid)) {
+                showError("O identificador (txid) deve conter apenas letras e números (máx. 10 caracteres)!");
+                return;
+            }
+            
+            // Se txid estiver vazio, usar valor padrão
+            if (!txid) {
+                txid = "PIX" + Math.random().toString(36).substr(2, 6).toUpperCase();
+                document.getElementById("txid").value = txid;
+            }
+            
             const valor = valorInteiro + valorCentavos / 100;
-            const payload = gerarPayload(chave, valor, txid, nome, cidade);
-
-            // Exibir payload
-            document.getElementById("payload-text").textContent = payload;
-
-            // Gerar QR Code
-            const qrImage = document.getElementById("qr-image");
+            const payload = gerarPayload(chave, valor, txid);
+            
+            // Gerar QR Code no modal
+            const modal = document.getElementById("pixModal");
+            const qrImage = document.getElementById("modalQrImage");
+            const payloadText = document.getElementById("modalPayloadText");
+            
             QRCode.toDataURL(payload, { errorCorrectionLevel: 'M' }, (err, url) => {
                 if (err) {
                     showError("Erro ao gerar QR Code!");
                     return;
                 }
                 qrImage.src = url;
-                qrImage.style.display = "block";
+                payloadText.textContent = payload;
+                modal.style.display = "block";
             });
 
             clearError();
+        }
+        
+        function fecharModal() {
+            document.getElementById("pixModal").style.display = "none";
+        }
+        
+        function copiarPayload() {
+            const payloadText = document.getElementById("modalPayloadText").textContent;
+            navigator.clipboard.writeText(payloadText).then(() => {
+                alert("Chave PIX copiada para a área de transferência!");
+            }).catch(err => {
+                console.error('Erro ao copiar texto: ', err);
+            });
         }
 
         function showError(message) {
@@ -206,6 +280,14 @@
 
         function clearError() {
             document.getElementById("error-message").textContent = "";
+        }
+        
+        // Fechar modal ao clicar fora dele
+        window.onclick = function(event) {
+            const modal = document.getElementById("pixModal");
+            if (event.target == modal) {
+                modal.style.display = "none";
+            }
         }
     </script>
 </body>
