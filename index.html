@@ -226,6 +226,7 @@
         }
         
         .modal.show {
+            display: block;
             opacity: 1;
         }
         
@@ -423,7 +424,7 @@
         </div>
         
         <div class="footer">
-            <p>Gerador de PIX by Rede Gamer&copy; 2025 | <a href="https://pix-v2.pages.dev/" style="color: var(--primary);">pix-v2.pages.dev</a></p>
+            <p>Gerador de PIX by Rede Gamer© 2025 | <a href="https://pix-v2.pages.dev/" style="color: var(--primary);">pix-v2.pages.dev</a></p>
         </div>
     </div>
 
@@ -432,7 +433,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2><i class="fas fa-check-circle"></i> Seu PIX está pronto!</h2>
-                <span class="close">&times;</span>
+                <span class="close">×</span>
             </div>
             <div class="modal-body">
                 <div class="qr-code-container">
@@ -453,6 +454,8 @@
 
     <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
     <script>
+        console.log("Script carregado com sucesso");
+
         // DOM Elements
         const gerarBtn = document.getElementById('gerar-btn');
         const modal = document.getElementById('pixModal');
@@ -462,20 +465,26 @@
         const themeToggle = document.getElementById('themeToggle');
         const themeIcon = themeToggle.querySelector('i');
         
+        console.log("Elementos DOM capturados:", { gerarBtn, modal, closeBtn, copyBtn, tooltip, themeToggle });
+
         // Theme Management
         const savedTheme = localStorage.getItem('theme') || 'light';
+        console.log("Tema carregado:", savedTheme);
         document.documentElement.setAttribute('data-theme', savedTheme);
         updateThemeIcon(savedTheme);
         
         themeToggle.addEventListener('click', () => {
+            console.log("Botão de tema clicado");
             const currentTheme = document.documentElement.getAttribute('data-theme');
             const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            console.log("Alterando tema para:", newTheme);
             document.documentElement.setAttribute('data-theme', newTheme);
             localStorage.setItem('theme', newTheme);
             updateThemeIcon(newTheme);
         });
         
         function updateThemeIcon(theme) {
+            console.log("Atualizando ícone do tema:", theme);
             if (theme === 'dark') {
                 themeIcon.classList.remove('fa-moon');
                 themeIcon.classList.add('fa-sun');
@@ -486,12 +495,22 @@
         }
         
         // Event Listeners
-        gerarBtn.addEventListener('click', gerarPix);
-        closeBtn.addEventListener('click', fecharModal);
-        copyBtn.addEventListener('click', copiarPayload);
+        gerarBtn.addEventListener('click', () => {
+            console.log("Botão Gerar clicado");
+            gerarPix();
+        });
+        closeBtn.addEventListener('click', () => {
+            console.log("Botão Fechar clicado");
+            fecharModal();
+        });
+        copyBtn.addEventListener('click', () => {
+            console.log("Botão Copiar clicado");
+            copiarPayload();
+        });
         
         // Functions
         function calculateCRC16(data) {
+            console.log("Calculando CRC16 para:", data);
             let crc = 0xFFFF;
             const polynomial = 0x1021;
             for (let i = 0; i < data.length; i++) {
@@ -506,10 +525,13 @@
                     crc &= 0xFFFF;
                 }
             }
-            return crc.toString(16).toUpperCase().padStart(4, '0');
+            const result = crc.toString(16).toUpperCase().padStart(4, '0');
+            console.log("CRC16 calculado:", result);
+            return result;
         }
 
         function gerarPayload(chave, valor, txid) {
+            console.log("Gerando payload com:", { chave, valor, txid });
             const nome = "N"; // Fixo conforme especificação
             const cidade = "C"; // Fixo conforme especificação
             
@@ -526,47 +548,58 @@
             payload.push(`60${cidade.length.toString().padStart(2, '0')}${cidade}`);
             payload.push(`62${`05${txid.length.toString().padStart(2, '0')}${txid}`.length.toString().padStart(2, '0')}05${txid.length.toString().padStart(2, '0')}${txid}`);
             const payloadSemCRC = payload.join("") + "6304";
+            console.log("Payload sem CRC:", payloadSemCRC);
             const crc = calculateCRC16(payloadSemCRC);
-            return payloadSemCRC + crc;
+            const finalPayload = payloadSemCRC + crc;
+            console.log("Payload final:", finalPayload);
+            return finalPayload;
         }
 
         function gerarPix() {
+            console.log("Iniciando função gerarPix");
             const tipoChave = document.getElementById("tipo-chave").value;
             const chave = document.getElementById("chave-pix").value.trim();
             const valorInteiro = parseFloat(document.getElementById("valor-inteiro").value || 0);
             const valorCentavos = parseFloat(document.getElementById("valor-centavos").value || 0);
             let txid = document.getElementById("txid").value.trim().toUpperCase();
             
+            console.log("Dados de entrada:", { tipoChave, chave, valorInteiro, valorCentavos, txid });
+
             // Validações
             if (!chave) {
+                console.log("Erro: Chave PIX vazia");
                 showError("Por favor, insira uma chave PIX válida");
                 return;
             }
             
+            console.log("Validando formato da chave para tipo:", tipoChave);
             if ((tipoChave === "cpf" && !/^\d{11}$/.test(chave)) ||
                 (tipoChave === "cnpj" && !/^\d{14}$/.test(chave)) ||
                 (tipoChave === "telefone" && !/^\+55\d{10,11}$/.test(chave)) ||
                 (tipoChave === "email" && !/@/.test(chave))) {
+                console.log("Erro: Formato inválido para chave");
                 showError(`Formato inválido para chave do tipo ${tipoChave}`);
                 return;
             }
             
-            // Validar txid (máx 10 caracteres, apenas letras e números)
+            console.log("Validando txid");
             if (txid && !/^[A-Z0-9]{1,10}$/.test(txid)) {
+                console.log("Erro: txid inválido");
                 showError("O identificador deve conter apenas letras e números (máx. 10 caracteres)");
                 return;
             }
             
-            // Se txid estiver vazio, usar valor padrão
             if (!txid) {
                 txid = "PIX" + Math.random().toString(36).substr(2, 6).toUpperCase();
                 document.getElementById("txid").value = txid;
+                console.log("txid gerado automaticamente:", txid);
             }
             
             const valor = valorInteiro + valorCentavos / 100;
+            console.log("Valor calculado:", valor);
             const payload = gerarPayload(chave, valor, txid);
             
-            // Gerar QR Code no modal
+            console.log("Iniciando geração do QR Code");
             const qrImage = document.getElementById("modalQrImage");
             const payloadText = document.getElementById("modalPayloadText");
             
@@ -579,53 +612,68 @@
                 }
             }, (err, url) => {
                 if (err) {
+                    console.error("Erro ao gerar QR Code:", err);
                     showError("Ocorreu um erro ao gerar o QR Code");
                     return;
                 }
+                console.log("QR Code gerado com sucesso, URL:", url);
                 qrImage.src = url;
                 payloadText.textContent = payload;
+                console.log("Conteúdo do modal atualizado, chamando abrirModal");
                 abrirModal();
             });
 
+            console.log("Limpando mensagens de erro");
             clearError();
         }
         
         function abrirModal() {
+            console.log("Abrindo modal");
             modal.classList.add('show');
             document.body.style.overflow = 'hidden';
+            console.log("Classe 'show' adicionada ao modal, overflow definido como hidden");
         }
         
         function fecharModal() {
+            console.log("Fechando modal");
             modal.classList.remove('show');
             document.body.style.overflow = 'auto';
+            console.log("Classe 'show' removida do modal, overflow restaurado");
         }
         
         function copiarPayload() {
+            console.log("Iniciando cópia do payload");
             const payloadText = document.getElementById("modalPayloadText").textContent;
             navigator.clipboard.writeText(payloadText).then(() => {
+                console.log("Payload copiado com sucesso:", payloadText);
                 tooltip.classList.add('show');
                 setTimeout(() => {
+                    console.log("Removendo tooltip após 2 segundos");
                     tooltip.classList.remove('show');
                 }, 2000);
             }).catch(err => {
-                console.error('Erro ao copiar texto: ', err);
+                console.error("Erro ao copiar payload:", err);
                 alert("Não foi possível copiar a chave PIX");
             });
         }
 
         function showError(message) {
+            console.log("Exibindo mensagem de erro:", message);
             const errorElement = document.getElementById("error-message");
             errorElement.textContent = message;
             errorElement.style.display = 'block';
         }
 
         function clearError() {
-            document.getElementById("error-message").style.display = 'none';
+            console.log("Limpando mensagem de erro");
+            const errorElement = document.getElementById("error-message");
+            errorElement.style.display = 'none';
         }
         
         // Fechar modal ao clicar fora
         window.addEventListener('click', (event) => {
             if (event.target === modal) {
+                console.log("Clicado fora do modal, fechando");
                 fecharModal();
             }
         });
@@ -633,9 +681,13 @@
         // Fechar modal com ESC
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && modal.classList.contains('show')) {
+                console.log("Tecla ESC pressionada, fechando modal");
                 fecharModal();
             }
         });
+
+        // Verificar se a biblioteca QRCode está carregada
+        console.log("Verificando biblioteca QRCode:", typeof QRCode);
     </script>
 </body>
 </html>
